@@ -1,77 +1,76 @@
 <!doctype html>
+<!--
+  index.HTML — Nassau County Resources Map (MapLibre GL JS)
+
+  ✅ Features
+  - Full-screen MapLibre map with contextual basemap (CARTO Positron GL)
+  - Welcome / Disclaimer modal (re-openable)
+  - Multi-dataset loader (multiple GeoJSON files in same directory)
+  - Dataset toggles (show/hide datasets)
+  - Category filter + Select all/none
+  - Search across multiple fields
+  - Clustering + cluster click zoom
+  - Click popups + directions link
+  - Zoom to Nassau bounds + zoom to visible data
+  - Heavily commented, scalable architecture
+
+  IMPORTANT:
+  - Browsers generally block fetch() from file:// for local files.
+    Run a local server:
+      python3 -m http.server 8000
+    Then open:
+      http://localhost:8000/index.HTML
+
+  After you upload your NEW GeoJSON, update:
+  - DATASETS (filenames)
+  - FIELDS mapping (property names for Name/Category/Address/etc.)
+-->
+
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Nassau County Resources Map</title>
 
   <!-- MapLibre GL JS (CDN) -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
-    crossorigin="anonymous"
-  />
-  <script
-    src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
-    crossorigin="anonymous"
-  ></script>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" crossorigin="anonymous" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin="anonymous"></script>
 
   <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-    }
-    #map {
-      position: fixed;
-      inset: 0;
-    }
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    #map { position: fixed; inset: 0; }
 
-    /* Floating panel */
+    /* Left control panel */
     .panel {
       position: fixed;
       top: 12px;
       left: 12px;
       z-index: 10;
-      width: min(360px, calc(100vw - 24px));
-      background: rgba(255,255,255,0.95);
+      width: min(400px, calc(100vw - 24px));
+      background: rgba(255,255,255,0.96);
       border: 1px solid rgba(0,0,0,0.12);
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      border-radius: 14px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.18);
       overflow: hidden;
-      backdrop-filter: blur(6px);
+      backdrop-filter: blur(8px);
     }
-    .panel header {
-      padding: 12px 12px 10px;
-      border-bottom: 1px solid rgba(0,0,0,0.08);
+    .panel header { padding: 12px 12px 10px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+    .panel h1 { margin: 0; font-size: 14px; font-weight: 900; }
+    .panel .sub { margin-top: 6px; font-size: 12px; color: rgba(0,0,0,0.65); line-height: 1.35; }
+    .pill {
+      display: inline-block;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(0,0,0,0.14);
+      color: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.03);
+      margin-left: 8px;
+      vertical-align: middle;
     }
-    .panel h1 {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0.2px;
-    }
-    .panel .sub {
-      margin-top: 6px;
-      font-size: 12px;
-      color: rgba(0,0,0,0.65);
-      line-height: 1.3;
-    }
-    .panel .body {
-      padding: 12px;
-      display: grid;
-      gap: 10px;
-    }
-
-    .row {
-      display: grid;
-      gap: 6px;
-    }
-    label {
-      font-size: 12px;
-      font-weight: 600;
-      color: rgba(0,0,0,0.8);
-    }
+    .panel .body { padding: 12px; display: grid; gap: 12px; }
+    .row { display: grid; gap: 6px; }
+    label { font-size: 12px; font-weight: 800; color: rgba(0,0,0,0.82); }
     input[type="text"] {
       width: 100%;
       padding: 10px 10px;
@@ -79,94 +78,122 @@
       border: 1px solid rgba(0,0,0,0.18);
       outline: none;
       font-size: 13px;
-      background: white;
+      background: #fff;
     }
     input[type="text"]:focus {
       border-color: rgba(0,0,0,0.35);
-      box-shadow: 0 0 0 3px rgba(0,0,0,0.07);
+      box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
     }
 
-    .cats {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px 10px;
-      align-items: start;
-    }
-    .cat {
+    .list { display: grid; gap: 8px; }
+    .item {
       display: flex;
-      gap: 8px;
-      align-items: center;
+      gap: 10px;
+      align-items: flex-start;
       user-select: none;
       font-size: 12px;
       color: rgba(0,0,0,0.78);
+      line-height: 1.3;
     }
+    .item input { margin-top: 2px; }
     .swatch {
-      width: 10px;
-      height: 10px;
+      width: 10px; height: 10px;
       border-radius: 999px;
       border: 1px solid rgba(0,0,0,0.18);
+      margin-top: 3px;
       flex: 0 0 auto;
     }
-    .btns {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
+
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; }
     button {
       appearance: none;
       border: 1px solid rgba(0,0,0,0.18);
-      background: white;
+      background: #fff;
       padding: 8px 10px;
       border-radius: 10px;
       font-size: 12px;
       cursor: pointer;
     }
-    button:hover {
-      border-color: rgba(0,0,0,0.35);
+    button:hover { border-color: rgba(0,0,0,0.35); }
+
+    .status { font-size: 12px; color: rgba(0,0,0,0.65); }
+
+    /* Welcome modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 50;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal {
+      width: min(760px, 100%);
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+    .modal header {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .modal header h2 { margin: 0; font-size: 14px; font-weight: 1000; }
+    .modal .content {
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: rgba(0,0,0,0.82);
+    }
+    .modal .content p { margin: 10px 0; }
+    .modal .content ul { margin: 8px 0 0 18px; }
+    .modal .content li { margin: 6px 0; }
+    .modal .footer {
+      padding: 12px 16px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
     }
 
-    .status {
-      font-size: 12px;
-      color: rgba(0,0,0,0.65);
-    }
-
-    /* Popup styling */
+    /* Popup */
     .maplibregl-popup-content {
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 12px 12px 10px;
-      min-width: 240px;
-      max-width: 360px;
-      box-shadow: 0 10px 28px rgba(0,0,0,0.2);
+      min-width: 250px;
+      max-width: 390px;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.22);
     }
-    .p-title {
-      font-weight: 800;
-      margin: 0 0 6px;
-      font-size: 14px;
-      line-height: 1.25;
-    }
-    .p-line {
-      margin: 6px 0;
+    .p-title { font-weight: 1000; margin: 0 0 6px; font-size: 14px; line-height: 1.25; }
+    .p-line { margin: 6px 0; font-size: 12px; color: rgba(0,0,0,0.84); line-height: 1.35; }
+    .p-line b { color: rgba(0,0,0,0.92); }
+    .p-links a { word-break: break-word; }
+    .p-actions a {
+      display: inline-block;
+      margin-top: 8px;
       font-size: 12px;
-      color: rgba(0,0,0,0.8);
-      line-height: 1.35;
+      text-decoration: none;
+      border: 1px solid rgba(0,0,0,0.18);
+      padding: 6px 8px;
+      border-radius: 10px;
+      color: rgba(0,0,0,0.86);
+      background: rgba(0,0,0,0.02);
     }
-    .p-line b {
-      color: rgba(0,0,0,0.9);
-    }
-    .p-links a {
-      word-break: break-word;
-    }
+    .p-actions a:hover { border-color: rgba(0,0,0,0.35); }
 
-    /* Small screen: panel bottom */
     @media (max-width: 640px) {
       .panel {
-        top: auto;
-        left: 12px;
-        right: 12px;
-        bottom: 12px;
-        width: auto;
+        top: auto; left: 12px; right: 12px; bottom: 12px;
+        width: auto; max-height: 58vh; overflow: auto;
       }
-      .cats { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -174,40 +201,88 @@
 <body>
   <div id="map"></div>
 
-  <div class="panel" role="region" aria-label="Map filters">
+  <!-- UI panel -->
+  <div class="panel" role="region" aria-label="Map controls">
     <header>
-      <h1>Nassau County Resources</h1>
-      <div class="sub">Filter by category and search by name/address. Click a point for details.</div>
+      <h1>Nassau County Resources <span class="pill" id="pillLoaded">Loading…</span></h1>
+      <div class="sub">Toggle datasets, filter categories, search by name/address. Click a point for details.</div>
     </header>
+
     <div class="body">
       <div class="row">
         <label for="search">Search</label>
-        <input id="search" type="text" placeholder="e.g., 'Uniondale', 'legal', 'food'" />
+        <input id="search" type="text" placeholder="e.g., 'Uniondale', 'food', 'legal'" />
+      </div>
+
+      <div class="row">
+        <label>Datasets</label>
+        <div class="list" id="datasets"></div>
       </div>
 
       <div class="row">
         <label>Categories</label>
-        <div class="cats" id="cats"></div>
+        <div class="list" id="cats"></div>
       </div>
 
       <div class="btns">
-        <button id="selectAll" type="button">Select all</button>
-        <button id="selectNone" type="button">Select none</button>
-        <button id="zoomToData" type="button">Zoom to data</button>
+        <button id="openWelcome" type="button">Welcome / disclaimer</button>
+        <button id="zoomNassau" type="button">Zoom to Nassau County</button>
+        <button id="zoomVisible" type="button">Zoom to visible data</button>
+        <button id="selectAllCats" type="button">Select all categories</button>
+        <button id="selectNoneCats" type="button">Select none</button>
       </div>
 
-      <div class="status" id="status">Loading data…</div>
+      <div class="status" id="status">Initializing…</div>
+    </div>
+  </div>
+
+  <!-- Welcome modal -->
+  <div class="modal-backdrop" id="welcomeBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Welcome">
+      <header>
+        <h2>Welcome</h2>
+        <button id="closeWelcome" type="button">Close</button>
+      </header>
+      <div class="content">
+        <p><b>Purpose:</b> This map helps residents find nearby resources in Nassau County (food, shelter, medical, legal, etc.).</p>
+        <p><b>Disclaimer:</b> Hours, eligibility, and availability can change. Please call ahead to confirm. If this is an emergency, call <b>911</b>.</p>
+        <p><b>Who made this:</b> <b>[Your name / organization]</b> (replace this placeholder).</p>
+        <p><b>Where the data comes from:</b></p>
+        <ul>
+          <li>GeoJSON datasets stored alongside this page (same directory).</li>
+          <li>Each feature may include one or more source links (if provided in the dataset).</li>
+        </ul>
+        <p><b>How to use:</b> Toggle datasets on/off, filter categories, and search by name/address. Click a point to view details and get directions.</p>
+      </div>
+      <div class="footer">
+        <button id="welcomeGotIt" type="button">Got it</button>
+      </div>
     </div>
   </div>
 
   <script>
-    // ---- Configuration ----
-    const GEOJSON_URL = "./nassau_county.geojson";
-    const SOURCE_ID = "resources";
-    const LAYER_POINTS = "resources-points";
-    const LAYER_LABELS = "resources-labels";
+    // ============================================================
+    // CONFIG — UPDATE THESE ONCE YOU UPLOAD YOUR NEW GEOJSON FILE(S)
+    // ============================================================
 
-    // Category styling (edit freely)
+    // Add datasets here. Each must be a local file next to index.HTML.
+    // After you upload the new file, set url: "./<filename>.geojson"
+    const DATASETS = [
+      { id: "main", name: "Resources", url: "./nassau_county.geojson", defaultVisible: true },
+      // Examples:
+      // { id: "food", name: "Food Pantries", url: "./food_pantries.geojson", defaultVisible: false },
+      // { id: "shelter", name: "Shelters", url: "./shelters.geojson", defaultVisible: false },
+      // { id: "medical", name: "Medical Services", url: "./medical_services.geojson", defaultVisible: false },
+      // { id: "legal", name: "Legal Services", url: "./legal_services.geojson", defaultVisible: false },
+    ];
+
+    // Basemap (contextualized)
+    const BASEMAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+
+    // Nassau County approx bounds
+    const NASSAU_BOUNDS = [[-73.90, 40.63], [-73.40, 40.93]];
+
+    // Category styling — edit to match your categories (or leave; unknown categories get default)
     const CATEGORY_COLORS = {
       "Shelter / Housing": "#2E86FF",
       "Food bank / food assistance": "#18A558",
@@ -216,77 +291,55 @@
       "__default__": "#4B5563"
     };
 
-    const ALL_CATEGORIES = Object.keys(CATEGORY_COLORS).filter(k => k !== "__default__");
-
-    // ---- Map init ----
-    const map = new maplibregl.Map({
-      container: "map",
-      // Public demo style. Swap for your own style if needed.
-      style: "https://demotiles.maplibre.org/style.json",
-      center: [-73.58, 40.74], // Nassau-ish default
-      zoom: 10.2
-    });
-
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "imperial" }), "bottom-left");
-
-    // ---- UI state ----
-    const state = {
-      selectedCategories: new Set(ALL_CATEGORIES),
-      search: ""
+    // FIELD MAPPING — update these keys to match your GeoJSON properties exactly.
+    // Once you upload the new file, I’ll set these precisely for you.
+    const FIELDS = {
+      name: "Name",
+      category: "Category",
+      address: "Address",
+      hours: "Opening time",
+      capacity: "Capacity (if known)",
+      description: "Short description",
+      sources: "Primary source URL(s)" // allow multiple separated by semicolons
     };
 
-    // Build category checklist UI
-    const catsEl = document.getElementById("cats");
-    function makeCatRow(cat) {
-      const wrap = document.createElement("label");
-      wrap.className = "cat";
+    // Search will check these fields (strings)
+    const SEARCH_FIELDS = [FIELDS.name, FIELDS.address, FIELDS.description, FIELDS.hours, FIELDS.category];
 
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = true;
-      cb.dataset.cat = cat;
+    // Cluster config
+    const CLUSTER_MAX_ZOOM = 14;
+    const CLUSTER_RADIUS = 48;
 
-      const sw = document.createElement("span");
-      sw.className = "swatch";
-      sw.style.background = CATEGORY_COLORS[cat] || CATEGORY_COLORS.__default__;
+    // ======================
+    // STATE + DOM REFERENCES
+    // ======================
+    const state = {
+      visibleDatasets: new Set(DATASETS.filter(d => d.defaultVisible).map(d => d.id)),
+      selectedCategories: new Set(Object.keys(CATEGORY_COLORS).filter(k => k !== "__default__")),
+      search: "",
+      datasetFeatureCounts: new Map() // datasetId -> count
+    };
 
-      const text = document.createElement("span");
-      text.textContent = cat;
+    const $ = (id) => document.getElementById(id);
+    const el = {
+      datasets: $("datasets"),
+      cats: $("cats"),
+      status: $("status"),
+      pillLoaded: $("pillLoaded"),
+      search: $("search"),
+      welcomeBackdrop: $("welcomeBackdrop"),
+      openWelcome: $("openWelcome"),
+      closeWelcome: $("closeWelcome"),
+      welcomeGotIt: $("welcomeGotIt"),
+      zoomNassau: $("zoomNassau"),
+      zoomVisible: $("zoomVisible"),
+      selectAllCats: $("selectAllCats"),
+      selectNoneCats: $("selectNoneCats"),
+    };
 
-      wrap.appendChild(cb);
-      wrap.appendChild(sw);
-      wrap.appendChild(text);
+    function setStatus(msg) { el.status.textContent = msg; }
+    function setPill(msg) { el.pillLoaded.textContent = msg; }
 
-      cb.addEventListener("change", () => {
-        if (cb.checked) state.selectedCategories.add(cat);
-        else state.selectedCategories.delete(cat);
-        applyFilter();
-      });
-
-      return wrap;
-    }
-
-    ALL_CATEGORIES.forEach(cat => catsEl.appendChild(makeCatRow(cat)));
-
-    document.getElementById("selectAll").addEventListener("click", () => {
-      state.selectedCategories = new Set(ALL_CATEGORIES);
-      document.querySelectorAll('#cats input[type="checkbox"]').forEach(cb => cb.checked = true);
-      applyFilter();
-    });
-
-    document.getElementById("selectNone").addEventListener("click", () => {
-      state.selectedCategories = new Set();
-      document.querySelectorAll('#cats input[type="checkbox"]').forEach(cb => cb.checked = false);
-      applyFilter();
-    });
-
-    document.getElementById("search").addEventListener("input", (e) => {
-      state.search = (e.target.value || "").trim();
-      applyFilter();
-    });
-
-    // ---- Helpers ----
     function escHtml(s) {
       return String(s ?? "")
         .replaceAll("&", "&amp;")
@@ -296,25 +349,146 @@
         .replaceAll("'", "&#039;");
     }
 
-    function parseUrls(urlField) {
-      // Your GeoJSON stores URLs in a single string separated by ";" sometimes.
-      if (!urlField) return [];
-      return String(urlField)
-        .split(";")
-        .map(s => s.trim())
-        .filter(Boolean);
+    function parseUrls(v) {
+      if (!v) return [];
+      return String(v).split(";").map(s => s.trim()).filter(Boolean);
     }
 
-    function updateStatus(text) {
-      document.getElementById("status").textContent = text;
-    }
+    // ======================
+    // MAP INITIALIZATION
+    // ======================
+    const map = new maplibregl.Map({
+      container: "map",
+      style: BASEMAP_STYLE,
+      center: [-73.58, 40.74],
+      zoom: 10.2
+    });
 
-    function categoryColorExpression() {
-      // MapLibre style expression: match Category to color
-      const expr = ["match", ["get", "Category"]];
-      for (const cat of ALL_CATEGORIES) {
-        expr.push(cat, CATEGORY_COLORS[cat] || CATEGORY_COLORS.__default__);
+    // Controls
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    map.addControl(new maplibregl.FullscreenControl(), "top-right");
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 140, unit: "imperial" }), "bottom-left");
+    map.addControl(new maplibregl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: false,
+      showUserLocation: true
+    }), "top-right");
+
+    // ======================
+    // UI — Welcome modal
+    // ======================
+    function openWelcome() {
+      el.welcomeBackdrop.style.display = "flex";
+      el.welcomeBackdrop.setAttribute("aria-hidden", "false");
+    }
+    function closeWelcome() {
+      el.welcomeBackdrop.style.display = "none";
+      el.welcomeBackdrop.setAttribute("aria-hidden", "true");
+      localStorage.setItem("nassau_map_welcome_seen", "1");
+    }
+    el.openWelcome.addEventListener("click", openWelcome);
+    el.closeWelcome.addEventListener("click", closeWelcome);
+    el.welcomeGotIt.addEventListener("click", closeWelcome);
+    el.welcomeBackdrop.addEventListener("click", (e) => {
+      if (e.target === el.welcomeBackdrop) closeWelcome();
+    });
+
+    // Show on first visit
+    if (!localStorage.getItem("nassau_map_welcome_seen")) openWelcome();
+
+    // ======================
+    // UI — Datasets toggle list
+    // ======================
+    function renderDatasetToggles() {
+      el.datasets.innerHTML = "";
+      for (const d of DATASETS) {
+        const wrap = document.createElement("label");
+        wrap.className = "item";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = state.visibleDatasets.has(d.id);
+        cb.dataset.datasetId = d.id;
+
+        const text = document.createElement("div");
+        const count = state.datasetFeatureCounts.get(d.id);
+        text.innerHTML = `<b>${escHtml(d.name)}</b>${typeof count === "number" ? ` <span style="color:rgba(0,0,0,0.55)">(${count})</span>` : ""}<div style="color:rgba(0,0,0,0.55)">${escHtml(d.url)}</div>`;
+
+        wrap.appendChild(cb);
+        wrap.appendChild(text);
+
+        cb.addEventListener("change", () => {
+          if (cb.checked) state.visibleDatasets.add(d.id);
+          else state.visibleDatasets.delete(d.id);
+          updateDatasetVisibility();
+          applyAllFilters();
+        });
+
+        el.datasets.appendChild(wrap);
       }
+    }
+
+    // ======================
+    // UI — Category filter list
+    // ======================
+    function renderCategoryToggles() {
+      el.cats.innerHTML = "";
+      const cats = Object.keys(CATEGORY_COLORS).filter(k => k !== "__default__").sort();
+
+      for (const cat of cats) {
+        const wrap = document.createElement("label");
+        wrap.className = "item";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = state.selectedCategories.has(cat);
+        cb.dataset.cat = cat;
+
+        const sw = document.createElement("span");
+        sw.className = "swatch";
+        sw.style.background = CATEGORY_COLORS[cat] || CATEGORY_COLORS.__default__;
+
+        const text = document.createElement("div");
+        text.textContent = cat;
+
+        wrap.appendChild(cb);
+        wrap.appendChild(sw);
+        wrap.appendChild(text);
+
+        cb.addEventListener("change", () => {
+          if (cb.checked) state.selectedCategories.add(cat);
+          else state.selectedCategories.delete(cat);
+          applyAllFilters();
+        });
+
+        el.cats.appendChild(wrap);
+      }
+    }
+
+    el.selectAllCats.addEventListener("click", () => {
+      state.selectedCategories = new Set(Object.keys(CATEGORY_COLORS).filter(k => k !== "__default__"));
+      renderCategoryToggles();
+      applyAllFilters();
+    });
+
+    el.selectNoneCats.addEventListener("click", () => {
+      state.selectedCategories = new Set();
+      renderCategoryToggles();
+      applyAllFilters();
+    });
+
+    el.search.addEventListener("input", (e) => {
+      state.search = (e.target.value || "").trim();
+      applyAllFilters();
+    });
+
+    // ======================
+    // MAP STYLE EXPRESSIONS
+    // ======================
+    function categoryColorExpression() {
+      const cats = Object.keys(CATEGORY_COLORS).filter(k => k !== "__default__");
+      const expr = ["match", ["get", FIELDS.category]];
+      for (const c of cats) expr.push(c, CATEGORY_COLORS[c] || CATEGORY_COLORS.__default__);
       expr.push(CATEGORY_COLORS.__default__);
       return expr;
     }
@@ -325,170 +499,315 @@
       // Category filter
       const selected = Array.from(state.selectedCategories);
       if (selected.length === 0) {
-        // show none
-        clauses.push(["==", ["get", "Category"], "__nope__"]);
+        clauses.push(["==", ["get", FIELDS.category], "__none__"]);
       } else {
-        clauses.push(["in", ["get", "Category"], ["literal", selected]]);
+        clauses.push(["in", ["get", FIELDS.category], ["literal", selected]]);
       }
 
-      // Search filter (substring match across common fields)
-      const q = state.search.trim().toLowerCase();
-      if (q.length > 0) {
+      // Search filter: substring match across SEARCH_FIELDS
+      const q = state.search.toLowerCase().trim();
+      if (q) {
         const qExpr = ["literal", q];
         const contains = (field) => [
           "!=", ["index-of", qExpr, ["downcase", ["to-string", ["coalesce", ["get", field], ""]]]], -1
         ];
-        clauses.push(["any",
-          contains("Name"),
-          contains("Address"),
-          contains("Short description"),
-          contains("Opening time"),
-          contains("Category")
-        ]);
+        clauses.push(["any", ...SEARCH_FIELDS.map(contains)]);
       }
 
       return clauses;
     }
 
-    function applyFilter() {
-      if (!map.getLayer(LAYER_POINTS)) return;
+    // ======================
+    // DATASET LAYER HELPERS
+    // ======================
+    function idsFor(datasetId) {
+      // Standardize layer/source ids per dataset
+      return {
+        source: `src-${datasetId}`,
+        // cluster layers
+        clusters: `clusters-${datasetId}`,
+        clusterCount: `cluster-count-${datasetId}`,
+        // point layer (unclustered)
+        points: `points-${datasetId}`,
+        labels: `labels-${datasetId}`
+      };
+    }
+
+    function setLayerVisibility(layerId, visible) {
+      if (!map.getLayer(layerId)) return;
+      map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+    }
+
+    function updateDatasetVisibility() {
+      for (const d of DATASETS) {
+        const { clusters, clusterCount, points, labels } = idsFor(d.id);
+        const visible = state.visibleDatasets.has(d.id);
+        setLayerVisibility(clusters, visible);
+        setLayerVisibility(clusterCount, visible);
+        setLayerVisibility(points, visible);
+        setLayerVisibility(labels, visible);
+      }
+      updatePillAndStatus();
+    }
+
+    function applyAllFilters() {
       const filter = buildFilterExpression();
-      map.setFilter(LAYER_POINTS, filter);
-      map.setFilter(LAYER_LABELS, filter);
-
-      const selCount = state.selectedCategories.size;
-      const q = state.search.trim();
-      updateStatus(`Filters: ${selCount}/${ALL_CATEGORIES.length} categories${q ? `, search="${q}"` : ""}`);
+      for (const d of DATASETS) {
+        const { points, labels } = idsFor(d.id);
+        // Apply only to unclustered layers (clusters represent many points)
+        if (map.getLayer(points)) map.setFilter(points, filter);
+        if (map.getLayer(labels)) map.setFilter(labels, filter);
+      }
+      updatePillAndStatus();
     }
 
-    function fitToData() {
-      const src = map.getSource(SOURCE_ID);
-      const data = src?._data; // MapLibre internal reference; ok for simple fit.
-      if (!data || !data.features || data.features.length === 0) return;
-
-      const coords = data.features
-        .map(f => f.geometry && f.geometry.type === "Point" ? f.geometry.coordinates : null)
-        .filter(Boolean);
-
-      if (coords.length === 0) return;
-
-      let minX = coords[0][0], minY = coords[0][1], maxX = coords[0][0], maxY = coords[0][1];
-      for (const [x,y] of coords) {
-        minX = Math.min(minX, x); minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
-      }
-
-      map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 60, duration: 900 });
+    function updatePillAndStatus() {
+      const vis = Array.from(state.visibleDatasets);
+      const visNames = DATASETS.filter(d => state.visibleDatasets.has(d.id)).map(d => d.name);
+      const catCount = state.selectedCategories.size;
+      const q = state.search ? ` | search="${state.search}"` : "";
+      setPill(vis.length ? `${vis.length} dataset(s)` : "No datasets");
+      setStatus(`Visible: ${visNames.join(", ") || "none"} | categories: ${catCount}/${Object.keys(CATEGORY_COLORS).length - 1}${q}`);
     }
 
-    document.getElementById("zoomToData").addEventListener("click", fitToData);
-
-    // ---- Load GeoJSON + add layers ----
-    map.on("load", async () => {
-      try {
-        const resp = await fetch(GEOJSON_URL, { cache: "no-store" });
-        if (!resp.ok) throw new Error(`Failed to fetch ${GEOJSON_URL} (${resp.status})`);
-        const geojson = await resp.json();
-
-        map.addSource(SOURCE_ID, {
-          type: "geojson",
-          data: geojson
-        });
-
-        // Points
-        map.addLayer({
-          id: LAYER_POINTS,
-          type: "circle",
-          source: SOURCE_ID,
-          paint: {
-            "circle-radius": [
-              "interpolate", ["linear"], ["zoom"],
-              8, 4,
-              12, 7,
-              15, 10
-            ],
-            "circle-color": categoryColorExpression(),
-            "circle-opacity": 0.85,
-            "circle-stroke-width": 1.2,
-            "circle-stroke-color": "rgba(0,0,0,0.35)"
-          }
-        });
-
-        // Labels (appear at higher zoom)
-        map.addLayer({
-          id: LAYER_LABELS,
-          type: "symbol",
-          source: SOURCE_ID,
-          minzoom: 12.5,
-          layout: {
-            "text-field": ["get", "Name"],
-            "text-size": 12,
-            "text-offset": [0, 1.1],
-            "text-anchor": "top",
-            "text-optional": true
-          },
-          paint: {
-            "text-halo-color": "rgba(255,255,255,0.95)",
-            "text-halo-width": 1.2
-          }
-        });
-
-        // Hover cursor
-        map.on("mouseenter", LAYER_POINTS, () => map.getCanvas().style.cursor = "pointer");
-        map.on("mouseleave", LAYER_POINTS, () => map.getCanvas().style.cursor = "");
-
-        // Popups
-        map.on("click", LAYER_POINTS, (e) => {
-          const f = e.features && e.features[0];
-          if (!f) return;
-
-          const p = f.properties || {};
-          const urls = parseUrls(p["Primary source URL(s)"]);
-
-          const html = `
-            <div>
-              <div class="p-title">${escHtml(p.Name || "Resource")}</div>
-              <div class="p-line"><b>Category:</b> ${escHtml(p.Category || "")}</div>
-              ${p.Address ? `<div class="p-line"><b>Address:</b> ${escHtml(p.Address)}</div>` : ""}
-              ${p["Opening time"] ? `<div class="p-line"><b>Hours:</b> ${escHtml(p["Opening time"])}</div>` : ""}
-              ${p["Capacity (if known)"] ? `<div class="p-line"><b>Capacity:</b> ${escHtml(p["Capacity (if known)"])}</div>` : ""}
-              ${p["Short description"] ? `<div class="p-line"><b>Notes:</b> ${escHtml(p["Short description"])}</div>` : ""}
-              ${
-                urls.length
-                  ? `<div class="p-line p-links"><b>Sources:</b><br>${urls
-                      .map(u => `<a href="${escHtml(u)}" target="_blank" rel="noopener noreferrer">${escHtml(u)}</a>`)
-                      .join("<br>")}</div>`
-                  : ""
-              }
-            </div>
-          `;
-
-          // Use feature geometry coordinate for accurate placement
-          const lngLat = (f.geometry && f.geometry.type === "Point") ? f.geometry.coordinates : e.lngLat;
-
-          new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "380px" })
-            .setLngLat(lngLat)
-            .setHTML(html)
-            .addTo(map);
-        });
-
-        // Initial fit and filter
-        updateStatus(`Loaded ${geojson.features?.length ?? 0} resources.`);
-        fitToData();
-        applyFilter();
-
-      } catch (err) {
-        console.error(err);
-        updateStatus(`Error: ${err.message}`);
-        alert(`Could not load GEOJSON: ${err.message}\n\nMake sure nassau_county.geojson is in the same folder as index.HTML and you're serving via a local web server (not file://).`);
-      }
+    // Fit bounds to Nassau County
+    el.zoomNassau.addEventListener("click", () => {
+      map.fitBounds(NASSAU_BOUNDS, { padding: 40, duration: 900 });
     });
 
-    // Note: Fetching local files usually requires serving via HTTP.
-    // For example:
-    //   python3 -m http.server 8000
-    // then open:
-    //   http://localhost:8000/index.HTML
+    // Fit bounds to all currently VISIBLE datasets (regardless of filters),
+    // using source data bounds (fast + robust).
+    el.zoomVisible.addEventListener("click", () => {
+      const bounds = new maplibregl.LngLatBounds();
+      let any = false;
+
+      for (const d of DATASETS) {
+        if (!state.visibleDatasets.has(d.id)) continue;
+        const s = map.getSource(idsFor(d.id).source);
+        const data = s && s._data; // internal reference; acceptable for this utility
+        const features = data && data.features;
+        if (!features || !features.length) continue;
+
+        for (const f of features) {
+          if (!f.geometry) continue;
+          if (f.geometry.type === "Point") {
+            bounds.extend(f.geometry.coordinates);
+            any = true;
+          }
+          // If your new file includes non-point geometries, we can enhance this after upload.
+        }
+      }
+
+      if (!any) return;
+      map.fitBounds(bounds, { padding: 60, duration: 900 });
+    });
+
+    // ======================
+    // POPUP GENERATION
+    // ======================
+    function popupHtml(props, lngLat) {
+      const name = props[FIELDS.name] ?? "Resource";
+      const cat = props[FIELDS.category] ?? "";
+      const addr = props[FIELDS.address] ?? "";
+      const hours = props[FIELDS.hours] ?? "";
+      const cap = props[FIELDS.capacity] ?? "";
+      const desc = props[FIELDS.description] ?? "";
+      const urls = parseUrls(props[FIELDS.sources]);
+
+      const [lng, lat] = lngLat;
+      const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat + "," + lng)}`;
+
+      return `
+        <div>
+          <div class="p-title">${escHtml(name)}</div>
+          ${cat ? `<div class="p-line"><b>Category:</b> ${escHtml(cat)}</div>` : ""}
+          ${addr ? `<div class="p-line"><b>Address:</b> ${escHtml(addr)}</div>` : ""}
+          ${hours ? `<div class="p-line"><b>Hours:</b> ${escHtml(hours)}</div>` : ""}
+          ${cap ? `<div class="p-line"><b>Capacity:</b> ${escHtml(cap)}</div>` : ""}
+          ${desc ? `<div class="p-line"><b>Notes:</b> ${escHtml(desc)}</div>` : ""}
+          ${
+            urls.length
+              ? `<div class="p-line p-links"><b>Sources:</b><br>${urls.map(u =>
+                  `<a href="${escHtml(u)}" target="_blank" rel="noopener noreferrer">${escHtml(u)}</a>`
+                ).join("<br>")}</div>`
+              : ""
+          }
+          <div class="p-actions">
+            <a href="${escHtml(gmaps)}" target="_blank" rel="noopener noreferrer">Directions</a>
+          </div>
+        </div>
+      `;
+    }
+
+    // ======================
+    // LOAD DATASETS + ADD LAYERS
+    // ======================
+    async function loadDataset(d) {
+      const { source, clusters, clusterCount, points, labels } = idsFor(d.id);
+
+      // Fetch GeoJSON
+      const resp = await fetch(d.url, { cache: "no-store" });
+      if (!resp.ok) throw new Error(`Failed to fetch ${d.url} (${resp.status})`);
+      const geojson = await resp.json();
+
+      // Save count for UI
+      state.datasetFeatureCounts.set(d.id, Array.isArray(geojson.features) ? geojson.features.length : 0);
+
+      // Add source (cluster enabled)
+      map.addSource(source, {
+        type: "geojson",
+        data: geojson,
+        cluster: true,
+        clusterMaxZoom: CLUSTER_MAX_ZOOM,
+        clusterRadius: CLUSTER_RADIUS
+      });
+
+      // Cluster circles
+      map.addLayer({
+        id: clusters,
+        type: "circle",
+        source,
+        filter: ["has", "point_count"],
+        paint: {
+          "circle-color": "rgba(17, 24, 39, 0.55)",
+          "circle-stroke-color": "rgba(255,255,255,0.9)",
+          "circle-stroke-width": 1.5,
+          "circle-radius": [
+            "step",
+            ["get", "point_count"],
+            16,   // <= first step
+            25, 22,
+            60, 28,
+            120, 34
+          ]
+        }
+      });
+
+      // Cluster count label
+      map.addLayer({
+        id: clusterCount,
+        type: "symbol",
+        source,
+        filter: ["has", "point_count"],
+        layout: {
+          "text-field": ["to-string", ["get", "point_count_abbreviated"]],
+          "text-size": 12
+        },
+        paint: {
+          "text-halo-color": "rgba(0,0,0,0.25)",
+          "text-halo-width": 1
+        }
+      });
+
+      // Unclustered points
+      map.addLayer({
+        id: points,
+        type: "circle",
+        source,
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 12, 7, 15, 10],
+          "circle-color": categoryColorExpression(),
+          "circle-opacity": 0.88,
+          "circle-stroke-width": 1.2,
+          "circle-stroke-color": "rgba(0,0,0,0.35)"
+        }
+      });
+
+      // Labels (appear at higher zoom)
+      map.addLayer({
+        id: labels,
+        type: "symbol",
+        source,
+        minzoom: 12.5,
+        filter: ["!", ["has", "point_count"]],
+        layout: {
+          "text-field": ["to-string", ["coalesce", ["get", FIELDS.name], ""]],
+          "text-size": 12,
+          "text-offset": [0, 1.1],
+          "text-anchor": "top",
+          "text-optional": true
+        },
+        paint: {
+          "text-halo-color": "rgba(255,255,255,0.95)",
+          "text-halo-width": 1.2
+        }
+      });
+
+      // Cluster click -> zoom in
+      map.on("click", clusters, async (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: [clusters] });
+        const clusterFeature = features && features[0];
+        if (!clusterFeature) return;
+
+        const clusterId = clusterFeature.properties.cluster_id;
+        const src = map.getSource(source);
+        src.getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return;
+          map.easeTo({ center: clusterFeature.geometry.coordinates, zoom });
+        });
+      });
+
+      // Point click -> popup
+      map.on("click", points, (e) => {
+        const f = e.features && e.features[0];
+        if (!f) return;
+
+        // Prefer exact point geometry coordinate
+        const lngLat = (f.geometry && f.geometry.type === "Point") ? f.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat];
+
+        new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "390px" })
+          .setLngLat(lngLat)
+          .setHTML(popupHtml(f.properties || {}, lngLat))
+          .addTo(map);
+      });
+
+      // Cursor affordance
+      map.on("mouseenter", clusters, () => map.getCanvas().style.cursor = "pointer");
+      map.on("mouseleave", clusters, () => map.getCanvas().style.cursor = "");
+      map.on("mouseenter", points, () => map.getCanvas().style.cursor = "pointer");
+      map.on("mouseleave", points, () => map.getCanvas().style.cursor = "");
+    }
+
+    // ======================
+    // BOOTSTRAP
+    // ======================
+    map.on("load", async () => {
+      try {
+        setStatus("Loading datasets…");
+
+        // Render UI placeholders early
+        renderCategoryToggles();
+        renderDatasetToggles();
+
+        // Load datasets sequentially (easier to debug). You can parallelize later if desired.
+        for (const d of DATASETS) {
+          await loadDataset(d);
+        }
+
+        // Now that counts exist, re-render dataset toggles (to show feature counts)
+        renderDatasetToggles();
+
+        // Apply initial visibility and filters
+        updateDatasetVisibility();
+        applyAllFilters();
+
+        // Initial viewport
+        map.fitBounds(NASSAU_BOUNDS, { padding: 40, duration: 900 });
+
+        setStatus("Ready.");
+      } catch (err) {
+        console.error(err);
+        setPill("Error");
+        setStatus(`Error: ${err.message}`);
+        alert(
+          `Could not load GeoJSON.\n\n` +
+          `1) Make sure you are using http:// (local server), not file://\n` +
+          `2) Ensure the GeoJSON files are in the same folder as index.HTML\n\n` +
+          `Details: ${err.message}`
+        );
+      }
+    });
   </script>
 </body>
 </html>
